@@ -8,6 +8,9 @@ using System.Windows.Forms;
 using System.IO;
 
 using RfidApiLib;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
+using System.IO.Ports;
 
 namespace Demo
 {
@@ -28,7 +31,6 @@ namespace Demo
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            cCommPort.SelectedIndex = 0;
             bRs232Con.Enabled = true;
             bRs232Discon.Enabled = false;
             bReset.Enabled = false;
@@ -52,6 +54,73 @@ namespace Demo
             for (nLoop = 0; nLoop < 256; nLoop++)
                 cEpcWordcnt.Items.Add(Convert.ToString(nLoop));
             cEpcWordcnt.SelectedIndex = 6;
+
+            PopulateCommPortList();
+            if (cCommPort.Items.Count > 0)
+                cCommPort.SelectedIndex = 0;
+            cCommPort.Click += new System.EventHandler(CommPortList_clicked);
+        }
+
+        private void CommPortList_clicked(object sender, EventArgs e)
+        {
+            PopulateCommPortList();
+        }
+
+        private void PopulateCommPortList()
+        {
+            List<string> possiblePorts = ComPortNames("10C4", "EA60");
+            string priorValue = cCommPort.Text;
+
+            cCommPort.Items.Clear();
+            foreach(string s in possiblePorts) 
+                cCommPort.Items.Add((object)s);
+            
+            if (priorValue != string.Empty && possiblePorts.Contains(priorValue))
+                cCommPort.SelectedIndex = possiblePorts.IndexOf(priorValue);
+
+            if (possiblePorts.Count == 0)
+                bRs232Con.Enabled = false;
+            else
+                bRs232Con.Enabled = true;
+        }
+
+        // Compile an array of COM port names associated with given VID and PID
+        // From https://www.codeproject.com/Tips/349002/Select-a-USB-Serial-Device-via-its-VID-PID
+        List<string> ComPortNames(String VID, String PID)
+        {
+            // Stage 1: Find what comm ports the registry has assigned for this VID and PID
+            // whether the devices are connected or not:-
+            String pattern = String.Format("^VID_{0}.PID_{1}", VID, PID);
+            Regex _rx = new Regex(pattern, RegexOptions.IgnoreCase);
+            List<string> candidatePorts = new List<string>();
+            RegistryKey rk1 = Registry.LocalMachine;
+            RegistryKey rk2 = rk1.OpenSubKey("SYSTEM\\CurrentControlSet\\Enum");
+            foreach (String s3 in rk2.GetSubKeyNames())
+            {
+                RegistryKey rk3 = rk2.OpenSubKey(s3);
+                foreach (String s in rk3.GetSubKeyNames())
+                {
+                    if (_rx.Match(s).Success)
+                    {
+                        RegistryKey rk4 = rk3.OpenSubKey(s);
+                        foreach (String s2 in rk4.GetSubKeyNames())
+                        {
+                            RegistryKey rk5 = rk4.OpenSubKey(s2);
+                            RegistryKey rk6 = rk5.OpenSubKey("Device Parameters");
+                            candidatePorts.Add((string)rk6.GetValue("PortName"));
+                        }
+                    }
+                }
+            }
+
+            // Stage 2: Find intersection of that with the list of serial ports
+            // that are currently connected:-
+            List<string> result = new List<string>();
+            foreach (String s in SerialPort.GetPortNames())
+                if (candidatePorts.Contains(s))
+                    result.Add(s);
+
+            return result;
         }
 
         private void bRs232Con_Click(object sender, EventArgs e)
@@ -92,6 +161,7 @@ namespace Demo
 
             bReset.Enabled = true;
 
+            cCommPort.Enabled = false;
             bRs232Con.Enabled = false;
             bRs232Discon.Enabled = true;
 
@@ -113,6 +183,7 @@ namespace Demo
             Reader1.SetBaudRate(0);
             Reader1.CloseCommPort();
             bRs232Con.Enabled = true;
+            cCommPort.Enabled = true;
             bRs232Discon.Enabled = false;
             bReset.Enabled = false;
 
