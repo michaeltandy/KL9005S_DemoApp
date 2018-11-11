@@ -262,7 +262,7 @@ namespace Demo
             int wordptr;
             int wordcnt;
             int status = 0;
-            byte[] value = new byte[16];
+            byte[] value = new byte[32];
 
             string s = "The data is:";
             string s1 = "";
